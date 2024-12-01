@@ -1,0 +1,19 @@
+app:
+    name: 'L0'
+    version: '1.0.0'
+    storage_path: "./storage.db"
+postgres:
+    host: 'localhost'
+    port: 5432
+    user: 'egor'
+    password: 'resu'
+    name: 'first_db'
+    pg_driver : 'pq'
+http:
+    host: 'localhost'
+    port: 8080
+kafka:
+    bootstrap_servers: 'localhost:9092'
+    topic: 'orders'
+
+
