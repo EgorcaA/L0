@@ -5,21 +5,18 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/EgorcaA/create_db/internal/generator"
 	"github.com/EgorcaA/create_db/internal/handler"
 	"github.com/EgorcaA/create_db/internal/logger/handlers/slogdiscard"
 	mocksredis "github.com/EgorcaA/create_db/internal/mocks/CacheClient"
 	mocksdb "github.com/EgorcaA/create_db/internal/mocks/Database"
-	"github.com/EgorcaA/create_db/internal/order_struct"
 )
 
 func TestHandle_message(t *testing.T) {
-	// Sample input
-	msg := order_struct.Order{
-		OrderUID: "test_order_uid",
-		// Add other fields as per your struct
-	}
 
-	// Create logger
+	msg := generator.GenerateFakeOrder()
+
+	// Discard logger
 	logger := slogdiscard.NewDiscardLogger()
 
 	ctx := context.Background()

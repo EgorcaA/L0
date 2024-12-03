@@ -12,6 +12,7 @@ import (
 	"github.com/brianvoe/gofakeit/v7"
 )
 
+// generates fake order structure
 func GenerateFakeOrder() order_struct.Order {
 	return order_struct.Order{
 		OrderUID:    gofakeit.UUID(),
@@ -64,11 +65,7 @@ func GenerateFakeOrder() order_struct.Order {
 	}
 }
 
-// func main() {
-// 	fakeOrder := generateFakeOrder()
-// 	fmt.Printf("Generated Fake Order: %+v\n", fakeOrder)
-// }
-
+// writes channel 3 messages with fake orders (debug)
 func Spam_channel(test_channel chan order_struct.Order) {
 	for i := 1; i <= 3; i++ {
 		order := GenerateFakeOrder()
@@ -79,6 +76,7 @@ func Spam_channel(test_channel chan order_struct.Order) {
 	}
 }
 
+// writes to kafka 5 messages with fake orders (debug)
 func Spam_kafka(log *slog.Logger, kafka_conf config.KafkaConfig) {
 	// Kafka broker address (adjust to match your setup)
 	brokers := []string{kafka_conf.BootstrapServers}

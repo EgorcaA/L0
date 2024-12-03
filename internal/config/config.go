@@ -36,6 +36,7 @@ type KafkaConfig struct {
 	Topic            string `yaml:"topic" env-default:"orders"`
 }
 
+// Redis config
 type RedisConfig struct {
 	Host string `yaml:"host" env-default:"localhost"`
 	Port string `yaml:"port" env-default:"6379"`

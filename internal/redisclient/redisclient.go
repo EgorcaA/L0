@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"strconv"
@@ -17,7 +16,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func InitRedis(redis_conf config.RedisConfig) (rdb *RedisCache, err error) {
+// creates redis client
+func InitRedis(redis_conf config.RedisConfig, log *slog.Logger) (rdb *RedisCache, err error) {
 
 	rdbb := redis.NewClient(&redis.Options{
 		Addr: net.JoinHostPort(redis_conf.Host, redis_conf.Port), //"localhost:6379", Update with your Redis address
@@ -26,10 +26,10 @@ func InitRedis(redis_conf config.RedisConfig) (rdb *RedisCache, err error) {
 
 	_, err = rdbb.Ping(context.Background()).Result()
 	if err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		log.Error(fmt.Sprintf("Failed to connect to Redis: %v", err))
 	}
 
-	log.Println("Connected to Redis")
+	log.Info("Connected to Redis")
 	return &RedisCache{Conn: rdbb}, nil
 }
 
@@ -55,7 +55,6 @@ func (rdb *RedisCache) RestoreCacheFromDB(ctx context.Context, log *slog.Logger,
 	for _, order := range orders {
 		cacheKey := "order:" + order.OrderUID
 		err := rdb.SaveOrder(ctx, order)
-		// err := rdb.Set(ctx, cacheKey, order, time.Hour*24).Err() // Cache for 24 hours
 		if err != nil {
 			log.Error(fmt.Sprintf("Error caching order %s: %v", order.OrderUID, err))
 		} else {
@@ -145,9 +144,12 @@ func (rdb *RedisCache) GetOrder(ctx context.Context, orderUID string) (order_str
 	// Retrieve general order details
 	orderKey := "order:" + orderUID
 	orderData, err := rdb.Conn.HGetAll(ctx, orderKey).Result()
-	if err != nil {
+	if err != nil || orderData["OrderUID"] == "" {
+		// log.Printf("didnt find")
 		return order, err
 	}
+	// log.Printf(orderData["OrderUID"])
+	// log.Printf("found")
 	order.OrderUID = orderData["OrderUID"]
 	order.TrackNumber = orderData["TrackNumber"]
 	order.Entry = orderData["Entry"]

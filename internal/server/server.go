@@ -10,7 +10,7 @@ import (
 	"github.com/EgorcaA/create_db/internal/redisclient"
 )
 
-// Главная страница с HTML-формой.
+// Main HTML-form
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := `
 	<!DOCTYPE html>
@@ -34,7 +34,7 @@ func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, tmpl)
 }
 
-// Обработчик формы для получения пользователя.
+// Order retrieve handler
 func OrderHandler(ctx context.Context, rdb redisclient.CacheClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -42,45 +42,18 @@ func OrderHandler(ctx context.Context, rdb redisclient.CacheClient) http.Handler
 			return
 		}
 
-		// Извлекаем ID из формы.
 		OrderUID := r.FormValue("OrderUID")
-		// if err != nil {
-		// 	http.Error(w, "некорректный формат ID", http.StatusBadRequest)
-		// 	return
-		// }
 
-		// Получаем данные пользователя из базы.
+		// getting order from cache
 		order, err := rdb.GetOrder(ctx, OrderUID)
-		if err != nil {
-			http.Error(w, "ошибка базы данных", http.StatusInternalServerError)
-			log.Printf("ошибка: %v\n", err)
+		if err != nil || order.OrderUID == "" {
+			http.Error(w, "DB internal error", http.StatusInternalServerError)
+			log.Printf("Cache search error: %v\n", err)
 			return
 		}
-		// if order == nil {
-		// 	http.Error(w, "пользователь не найден", http.StatusNotFound)
-		// 	return
-		// }
 
-		// Возвращаем данные пользователя.
+		// return
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(order)
 	}
 }
-
-// // Основная функция.
-// func main() {
-// 	// Инициализируем базу данных.
-// 	db, err := initDB()
-// 	if err != nil {
-// 		log.Fatalf("не удалось инициализировать базу данных: %v\n", err)
-// 	}
-// 	defer db.Close()
-
-// 	// Регистрируем обработчики.
-// 	http.HandleFunc("/", IndexHandler)        // Главная страница с HTML-формой.
-// 	http.HandleFunc("/user", OrderHandler(db)) // Обработчик формы.
-
-// 	// Запускаем HTTP-сервер.
-// 	fmt.Println("Сервер запущен на http://localhost:8080")
-// 	log.Fatal(http.ListenAndServe(":8080", nil))
-// }

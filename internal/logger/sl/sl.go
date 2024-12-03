@@ -24,6 +24,7 @@ func SetupLogger(env string) *slog.Logger {
 			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}),
 		)
 	case envProd:
+		//write json to file
 		logFile, err := os.OpenFile("slog.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			panic("Failed to open log file: " + err.Error())
@@ -33,7 +34,7 @@ func SetupLogger(env string) *slog.Logger {
 		log = slog.New(
 			slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: slog.LevelDebug}),
 		)
-	default: // If env config is invalid, set prod settings by default due to security
+	default:
 		log = slog.New(
 			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
 		)

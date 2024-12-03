@@ -10,17 +10,16 @@ import (
 	"github.com/EgorcaA/create_db/internal/storage"
 )
 
+// main kafka messages handler
 func Handle_message(log *slog.Logger, ctx context.Context,
 	rdb redisclient.CacheClient, msg order_struct.Order, db storage.Database) {
 
 	log.Debug("Got new message", slog.String("OrderUID", msg.OrderUID))
 
-	// Сохранение в базу данных
-
+	// Saving to db
 	err := db.InsertOrder(ctx, msg)
-	if err != nil { //order
-		// log.Printf("Ошибка сохранения заказа в базу данных: %v", err)
-		log.Debug(fmt.Sprintf("Error savong order in DB: %v", err),
+	if err != nil {
+		log.Debug(fmt.Sprintf("Error saving order in DB: %v", err),
 			slog.String("OrderUID", msg.OrderUID))
 	} else {
 		log.Debug("Order is saved in DB", slog.String("OrderUID", msg.OrderUID))

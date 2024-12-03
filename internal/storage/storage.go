@@ -54,11 +54,8 @@ type Database interface {
 	GetAllOrders() ([]order_struct.Order, error)
 }
 
+// returns new postres db connection
 func New(log *slog.Logger, Postgres_conf config.PostgresConfig) (*PostgresDB, error) {
-
-	// Open a database connection
-	// db, err := dbConn(db_name)
-	// connStr := fmt.Sprintf("host=localhost port=5432 user=egor password=resu dbname=%s  sslmode=disable", db_name)
 
 	serverConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable dbname=postgres",
 		Postgres_conf.Host,
@@ -177,16 +174,6 @@ func (db *PostgresDB) InsertOrder(ctx context.Context, order order_struct.Order)
 	if err != nil {
 		return err
 	}
-	// connStr := "host=localhost port=5433 user=postgres password=qwerty sslmode=disable"
-	// db, err := sql.Open("postgres", connStr)
-
-	// func saveOrderToDB(ctx context.Context, db *sql.DB, order generator.Order) error {
-	// query := `INSERT INTO orders (
-	// 	order_uid, track_number, entry, locale, internal_signature,
-	// 	customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard
-	// ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
-	// _, err := db.ExecContext(ctx, query, order.OrderUID, order.TrackNumber, order.Entry, order.Locale, order.InternalSignature,
-	// 	order.CustomerID, order.DeliveryService, order.ShardKey, order.SMID, order.DateCreated, order.OOFShard)
 
 	// Insert into orders table
 	_, err = tx.Exec(`
