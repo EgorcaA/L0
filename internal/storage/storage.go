@@ -5,49 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 
 	"github.com/EgorcaA/create_db/internal/config"
 	"github.com/EgorcaA/create_db/internal/order_struct"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 )
-
-// func main() {
-
-// 	//connect to db if exists
-// 	connStr := "host=localhost user=egor password=resu dbname=first_db port=5432 sslmode=disable"
-// 	db, err := sql.Open("postgres", connStr)
-// 	if err != nil {
-// 		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
-// 	}
-// 	fmt.Print("yes")
-
-// 	m, err := migrate.NewWithDatabaseInstance(
-// 		"file://migrations", // Path to the migrations folder
-// 		"postgres",          // Database driver name
-// 		db,                  // Database instance
-// 	)
-// 	if err != nil {
-// 		log.Fatalf("Failed to initialize migrations: %v", err)
-// 	}
-
-// 	// Apply all migrations
-// 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-// 		log.Fatalf("Failed to apply migrations: %v", err)
-// 	}
-
-// 	log.Println("Migrations applied successfully!")
-// }
-
-// func dbConn(db_name string) (*sql.DB, error) {
-// 	// Create and return a *sql.DB instance
-// 	connStr := fmt.Sprintf("host=localhost port=5432 user=egor password=resu dbname=%s  sslmode=disable", db_name)
-// 	db, err := sql.Open("postgres", connStr)
-// 	// if err != nil {
-// 	// 	log.Fatalf("Failed to connect to the database: %v", err)
-// 	// }
-// 	return db, err
-// }
 
 // Check if a database exists
 func databaseExists(db *sql.DB, dbName string) (bool, error) {
@@ -63,11 +27,34 @@ func databaseExists(db *sql.DB, dbName string) (bool, error) {
 	return true, nil
 }
 
+func checkTableExists(db *sql.DB, tableName string) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1 
+			FROM information_schema.tables 
+			WHERE table_schema = 'public' AND table_name = $1
+		)
+	`
+
+	var exists bool
+	err := db.QueryRow(query, tableName).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 type PostgresDB struct {
 	Conn *sql.DB
 }
 
-func New(Postgres_conf config.PostgresConfig) (*PostgresDB, error) {
+//go:generate go run github.com/vektra/mockery/v2@v2.49.1 --name=Database --outpkg=mocks --dir=.
+type Database interface {
+	InsertOrder(ctx context.Context, order order_struct.Order) error
+	GetAllOrders() ([]order_struct.Order, error)
+}
+
+func New(log *slog.Logger, Postgres_conf config.PostgresConfig) (*PostgresDB, error) {
 
 	// Open a database connection
 	// db, err := dbConn(db_name)
@@ -80,10 +67,9 @@ func New(Postgres_conf config.PostgresConfig) (*PostgresDB, error) {
 		Postgres_conf.Password)
 	serverDb, err := sql.Open("postgres", serverConnStr)
 	if err != nil {
-		log.Fatalf("Failed to connect to PostgreSQL server: %v", err)
+		log.Error(fmt.Sprintf("Failed to connect to PostgreSQL server: %v", err))
 	}
-	// defer serverDb.Close()
-	log.Println("server opened successfully!")
+	log.Info("PostgreSQL server opened successfully!: %v", err)
 
 	// Check if the database exists
 	exists, err := databaseExists(serverDb, Postgres_conf.Name)
@@ -362,10 +348,4 @@ func (db *PostgresDB) GetAllOrders() ([]order_struct.Order, error) {
 	}
 
 	return orders, nil
-}
-
-//go:generate go run github.com/vektra/mockery/v2@v2.49.1 --name=Database --outpkg=mocks --dir=.
-type Database interface {
-	InsertOrder(ctx context.Context, order order_struct.Order) error
-	GetAllOrders() ([]order_struct.Order, error)
 }

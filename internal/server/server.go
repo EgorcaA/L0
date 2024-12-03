@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/EgorcaA/create_db/internal/redisclient"
-	"github.com/redis/go-redis/v9"
 )
 
 // Главная страница с HTML-формой.
@@ -36,7 +35,7 @@ func IndexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Обработчик формы для получения пользователя.
-func OrderHandler(ctx context.Context, rdb *redis.Client) http.HandlerFunc {
+func OrderHandler(ctx context.Context, rdb redisclient.CacheClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "метод не поддерживается", http.StatusMethodNotAllowed)
@@ -51,7 +50,7 @@ func OrderHandler(ctx context.Context, rdb *redis.Client) http.HandlerFunc {
 		// }
 
 		// Получаем данные пользователя из базы.
-		order, err := redisclient.GetOrder(ctx, rdb, OrderUID)
+		order, err := rdb.GetOrder(ctx, OrderUID)
 		if err != nil {
 			http.Error(w, "ошибка базы данных", http.StatusInternalServerError)
 			log.Printf("ошибка: %v\n", err)

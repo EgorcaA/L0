@@ -36,12 +36,18 @@ type KafkaConfig struct {
 	Topic            string `yaml:"topic" env-default:"orders"`
 }
 
+type RedisConfig struct {
+	Host string `yaml:"host" env-default:"localhost"`
+	Port string `yaml:"port" env-default:"6379"`
+}
+
 // Config represents the overall configuration
 type Config struct {
 	App      AppConfig      `yaml:"app"`
 	Postgres PostgresConfig `yaml:"postgres"`
 	HTTP     HTTPConfig     `yaml:"http"`
 	Kafka    KafkaConfig    `yaml:"kafka"`
+	Redis    RedisConfig    `yaml:"redis"`
 }
 
 func MustLoad() *Config {

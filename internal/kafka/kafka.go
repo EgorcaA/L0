@@ -24,7 +24,7 @@
 // }
 // defer partitionConsumer.Close()
 
-//Handler
+// Handler
 // case msg := <-partitionConsumer.Messages():
 // if err := json.Unmarshal(msg.Value, &order); err != nil {
 

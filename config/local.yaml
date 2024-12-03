@@ -5,10 +5,10 @@ app:
     env: "local"
 postgres:
     host: 'localhost'
-    port: 5432
-    user: 'postgres1'
-    password: 'qwerty'
-    name: 'sec_db'
+    port: 5433
+    user: 'user'
+    password: 'password'
+    name: 'my_database'
     pg_driver : 'pq'
 http:
     host: 'localhost'
@@ -16,5 +16,8 @@ http:
 kafka:
     bootstrap_servers: 'localhost:9092'
     topic: 'orders'
+redis:
+    host: 'localhost'
+    port: 6379
 
 

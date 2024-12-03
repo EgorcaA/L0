@@ -13,6 +13,7 @@ import (
 
 	"github.com/EgorcaA/create_db/internal/config"
 	"github.com/EgorcaA/create_db/internal/generator"
+	"github.com/EgorcaA/create_db/internal/handler"
 	"github.com/EgorcaA/create_db/internal/logger/handlers/slogpretty"
 	"github.com/EgorcaA/create_db/internal/order_struct"
 	"github.com/EgorcaA/create_db/internal/redisclient"
@@ -23,8 +24,6 @@ import (
 
 func main() {
 
-	rdb, _ := redisclient.InitRedis()
-
 	dir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
@@ -34,13 +33,14 @@ func main() {
 	cfg := config.MustLoad()
 
 	log := setupLogger(cfg.App.Env)
-
 	log.Info(
 		"starting app",
 		slog.String("env", cfg.App.Env),
 		slog.String("version", "123"),
 	)
 	log.Debug("debug messages are enabled")
+
+	rdb, _ := redisclient.InitRedis(cfg.Redis)
 
 	db, err := storage.New(cfg.Postgres)
 	if err != nil {
@@ -54,7 +54,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Restore cache from database
-	redisclient.RestoreCacheFromDB(ctx, rdb, db)
+	rdb.RestoreCacheFromDB(ctx, db)
 
 	// Обработка системных сигналов
 	signals := make(chan os.Signal, 1)
@@ -77,29 +77,8 @@ func main() {
 		for {
 			select {
 			case msg := <-test_channel:
-				// msg_check_format(msg)
-				// log.Printf("Получено сообщение %v", msg)
-				log.Debug("Got new message", slog.String("OrderUID", msg.OrderUID))
+				handler.Handle_message(log, ctx, rdb, msg, db)
 
-				// Сохранение в базу данных
-
-				err := db.InsertOrder(ctx, msg)
-				if err != nil { //order
-					// log.Printf("Ошибка сохранения заказа в базу данных: %v", err)
-					log.Debug(fmt.Sprintf("Error savong order in DB: %v", err),
-						slog.String("OrderUID", msg.OrderUID))
-				} else {
-					log.Debug("Order is saved in DB", slog.String("OrderUID", msg.OrderUID))
-
-					// Cache the order in Redis
-					err = redisclient.SaveOrder(ctx, rdb, msg)
-					if err != nil {
-						log.Warn(fmt.Sprintf("Order is saved in Cache: %+v", msg),
-							slog.String("OrderUID", msg.OrderUID))
-					} else {
-						log.Debug("Order is saved in Cache", slog.String("OrderUID", msg.OrderUID))
-					}
-				}
 			case <-signals:
 				// log.Println("Получен сигнал завершения, выходим...")
 				log.Info("Received termination signal...")
@@ -140,7 +119,7 @@ func main() {
 		log.Error(fmt.Sprintf("Error closing server: %v", err))
 		// log.Fatalf("Ошибка при завершении работы сервера: %v", err)
 	}
-	rdb.Close()
+	rdb.Conn.Close()
 	log.Info("Server is closed")
 	// log.Println("Сервер успешно завершен.")
 
