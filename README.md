@@ -5,6 +5,7 @@ This project is designed to integrate Kafka, PostgreSQL, and an in-memory cache 
 Run with:
 ```
 docker compose -f zk-single-kafka-single.yml up
+go run ./cmd/app/main.go
 docker compose -f zk-single-kafka-single.yml down
 ```
 
