@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -14,11 +15,12 @@ import (
 	"github.com/EgorcaA/create_db/internal/config"
 	"github.com/EgorcaA/create_db/internal/generator"
 	"github.com/EgorcaA/create_db/internal/handler"
-	"github.com/EgorcaA/create_db/internal/logger/handlers/slogpretty"
+	"github.com/EgorcaA/create_db/internal/logger/sl"
 	"github.com/EgorcaA/create_db/internal/order_struct"
 	"github.com/EgorcaA/create_db/internal/redisclient"
 	"github.com/EgorcaA/create_db/internal/server"
 	"github.com/EgorcaA/create_db/internal/storage"
+	"github.com/IBM/sarama"
 	// "github.com/redis/go-redis/v9"
 )
 
@@ -32,7 +34,7 @@ func main() {
 
 	cfg := config.MustLoad()
 
-	log := setupLogger(cfg.App.Env)
+	log := sl.SetupLogger(cfg.App.Env)
 	log.Info(
 		"starting app",
 		slog.String("env", cfg.App.Env),
@@ -42,7 +44,7 @@ func main() {
 
 	rdb, _ := redisclient.InitRedis(cfg.Redis)
 
-	db, err := storage.New(cfg.Postgres)
+	db, err := storage.New(log, cfg.Postgres)
 	if err != nil {
 		// log.Fatalf("Failed to create storage instance: %v", err)
 		log.Info(fmt.Sprintf("Failed to create storage instance: %v", err))
@@ -51,39 +53,80 @@ func main() {
 	}
 	defer db.Conn.Close()
 
+	//kafka
+	brokers := []string{cfg.Kafka.BootstrapServers} // Kafka brockers
+	topic := cfg.Kafka.Topic                        // def "orders"
+
+	config := sarama.NewConfig()
+	config.Consumer.Return.Errors = true
+
+	// Kafka connect
+	client, err := sarama.NewClient(brokers, config)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to connect to Kafka: %v", err))
+	}
+	defer client.Close()
+
+	consumer, err := sarama.NewConsumerFromClient(client)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed creating Kafka consumer: %v", err))
+	}
+	defer consumer.Close()
+
+	partitionConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetNewest)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed subribing the topic: %v", err))
+	} else {
+		log.Info("Succeded subribing Kafka topic")
+	}
+	defer partitionConsumer.Close()
+	// kafka end
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Restore cache from database
-	rdb.RestoreCacheFromDB(ctx, db)
+	rdb.RestoreCacheFromDB(ctx, log, db)
 
 	// Обработка системных сигналов
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
-	// Чтение сообщений из Kafka
-	test_channel := make(chan order_struct.Order, 10)
-
-	go func() {
-		for i := 1; i <= 3; i++ {
-			order := generator.GenerateFakeOrder()
-			test_channel <- order
-			// fmt.Printf("Отправлен заказ: %+v\n", order)
-			fmt.Printf("Отправлен заказ \n")
-			time.Sleep(300 * time.Millisecond) // Симуляция нагрузки
-		}
-	}()
+	// test_channel := make(chan order_struct.Order, 10)
+	// go generator.Spam_channel(test_channel)
+	go generator.Spam_kafka(log, cfg.Kafka)
 
 	go func() {
 		for {
 			select {
-			case msg := <-test_channel:
-				handler.Handle_message(log, ctx, rdb, msg, db)
+			// case msg := <-test_channel:
+			case msg, ok := <-partitionConsumer.Messages():
+				if !ok {
+					log.Warn("Messages channel closed, exiting goroutine")
+					return
+				}
+
+				if msg.Value == nil {
+					log.Warn("Message value is nil, skipping")
+					continue
+				}
+				var order order_struct.Order
+				if err := json.Unmarshal(msg.Value, &order); err != nil {
+					log.Warn(fmt.Sprintf("Error unmarshal the message: %v", err))
+					continue
+				}
+				handler.Handle_message(log, ctx, rdb, order, db)
 
 			case <-signals:
 				// log.Println("Получен сигнал завершения, выходим...")
 				log.Info("Received termination signal...")
 				cancel()
 				return
+			case err := <-partitionConsumer.Errors():
+				log.Warn(fmt.Sprintf("Kafka error: %v", err))
+
+				// case <-ctx.Done(): // Optional: Handle context cancellation
+				// 	log.Info("Context canceled, exiting goroutine")
+				// 	return
 			}
 		}
 	}()
@@ -124,51 +167,4 @@ func main() {
 	// log.Println("Сервер успешно завершен.")
 
 	// <-ctx.Done()
-}
-
-const (
-	envLocal = "local"
-	envDev   = "dev"
-	envProd  = "prod"
-)
-
-func setupLogger(env string) *slog.Logger {
-	var log *slog.Logger
-
-	switch env {
-	case envLocal:
-		log = setupPrettySlog()
-	case envDev:
-		log = slog.New(
-			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}),
-		)
-	case envProd:
-		logFile, err := os.OpenFile("slog.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			panic("Failed to open log file: " + err.Error())
-		}
-		// defer logFile.Close()
-
-		log = slog.New(
-			slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: slog.LevelDebug}),
-		)
-	default: // If env config is invalid, set prod settings by default due to security
-		log = slog.New(
-			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
-		)
-	}
-
-	return log
-}
-
-func setupPrettySlog() *slog.Logger {
-	opts := slogpretty.PrettyHandlerOptions{
-		SlogOpts: &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		},
-	}
-
-	handler := opts.NewPrettyHandler(os.Stdout)
-
-	return slog.New(handler)
 }

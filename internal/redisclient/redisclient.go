@@ -3,7 +3,9 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"strconv"
 	"time"
@@ -33,7 +35,7 @@ func InitRedis(redis_conf config.RedisConfig) (rdb *RedisCache, err error) {
 
 //go:generate go run github.com/vektra/mockery/v2@v2.49.1 --name=CacheClient --outpkg=mocks --dir=.
 type CacheClient interface {
-	RestoreCacheFromDB(ctx context.Context, db *storage.PostgresDB)
+	RestoreCacheFromDB(ctx context.Context, log *slog.Logger, db *storage.PostgresDB)
 	SaveOrder(ctx context.Context, order order_struct.Order) error
 	GetOrder(ctx context.Context, orderUID string) (order_struct.Order, error)
 }
@@ -42,11 +44,11 @@ type RedisCache struct {
 	Conn *redis.Client
 }
 
-func (rdb *RedisCache) RestoreCacheFromDB(ctx context.Context, db *storage.PostgresDB) {
+func (rdb *RedisCache) RestoreCacheFromDB(ctx context.Context, log *slog.Logger, db *storage.PostgresDB) {
 	// Fetch all orders from the database
 	orders, err := db.GetAllOrders()
 	if err != nil {
-		log.Printf("Ошибка восстановления данных из базы данных: %v", err)
+		log.Error(fmt.Sprintf("Error recovering cache from db: %v", err))
 		return
 	}
 
@@ -55,12 +57,12 @@ func (rdb *RedisCache) RestoreCacheFromDB(ctx context.Context, db *storage.Postg
 		err := rdb.SaveOrder(ctx, order)
 		// err := rdb.Set(ctx, cacheKey, order, time.Hour*24).Err() // Cache for 24 hours
 		if err != nil {
-			log.Printf("Ошибка кэширования заказа %s: %v", order.OrderUID, err)
+			log.Error(fmt.Sprintf("Error caching order %s: %v", order.OrderUID, err))
 		} else {
-			log.Printf("Заказ восстановлен в кэш: %s", cacheKey)
+			log.Debug(fmt.Sprintf("Order recovered in cache: %s", cacheKey))
 		}
 	}
-	log.Println("Кэш успешно восстановлен из базы данных")
+	log.Info("Cache successfully recovered from db")
 }
 
 func (rdb *RedisCache) SaveOrder(ctx context.Context, order order_struct.Order) error {

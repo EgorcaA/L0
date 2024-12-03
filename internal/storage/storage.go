@@ -64,44 +64,45 @@ func New(log *slog.Logger, Postgres_conf config.PostgresConfig) (*PostgresDB, er
 		Postgres_conf.Host,
 		Postgres_conf.Port,
 		Postgres_conf.User,
-		Postgres_conf.Password)
+		Postgres_conf.Password,
+	)
 	serverDb, err := sql.Open("postgres", serverConnStr)
 	if err != nil {
 		log.Error(fmt.Sprintf("Failed to connect to PostgreSQL server: %v", err))
 	}
-	log.Info("PostgreSQL server opened successfully!: %v", err)
+	log.Info("PostgreSQL server opened successfully!")
 
-	// Check if the database exists
+	// Check if the database exists and if not create it
 	exists, err := databaseExists(serverDb, Postgres_conf.Name)
 	if err != nil {
-		log.Fatalf("Failed to check database existence: %v", err)
-	}
-
-	// Create the database if it does not exist
-	if !exists {
-		log.Println("creating tables")
-
+		log.Warn(fmt.Sprintf("Failed to check database existence: %v", err))
 		query := fmt.Sprintf("CREATE DATABASE %s;", Postgres_conf.Name)
 		_, err = serverDb.Exec(query)
 		if err != nil {
-			log.Printf("Error creating database %s: %v (it might already exist)", Postgres_conf.Name, err)
+			log.Warn(fmt.Sprintf("Error creating database %s: %v (it might already exist)", Postgres_conf.Name, err))
 		} else {
-			log.Printf("Database %s created successfully!", Postgres_conf.Name)
-		}
-		serverConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable dbname=%s",
-			Postgres_conf.Host,
-			Postgres_conf.Port,
-			Postgres_conf.User,
-			Postgres_conf.Password,
-			Postgres_conf.Name)
-		serverDb, err = sql.Open("postgres", serverConnStr)
-		if err != nil {
-			log.Fatalf("Failed to connect to PostgreSQL db %s: %v", Postgres_conf.Name, err)
-		} else {
-			log.Printf("Successfully connected to PostgreSQL db %s", Postgres_conf.Name)
+			log.Info(fmt.Sprintf("Database %s created successfully!", Postgres_conf.Name))
 		}
 
-		query = `
+	}
+	// connecting db
+	serverConnStr = fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable dbname=%s",
+		Postgres_conf.Host,
+		Postgres_conf.Port,
+		Postgres_conf.User,
+		Postgres_conf.Password,
+		Postgres_conf.Name)
+	serverDb, err = sql.Open("postgres", serverConnStr)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to connect to PostgreSQL db %s: %v", Postgres_conf.Name, err))
+	} else {
+		log.Info(fmt.Sprintf("Successfully connected to PostgreSQL db %s", Postgres_conf.Name))
+	}
+
+	// Create tables if they do not exist
+	exists, err = checkTableExists(serverDb, "orders")
+	if !exists {
+		query := `
 		CREATE TABLE orders (
 			order_uid VARCHAR PRIMARY KEY,
 			track_number VARCHAR NOT NULL,
@@ -161,49 +162,12 @@ func New(log *slog.Logger, Postgres_conf config.PostgresConfig) (*PostgresDB, er
 		);`
 		_, err = serverDb.Exec(query)
 		if err != nil {
-			log.Fatalf("Failed to create tables: %v", err)
+			log.Error(fmt.Sprintf("Failed to create tables: %v", err))
 		} else {
-			log.Printf("Created tables")
-		}
-
-		// log.Println("Migrations applied successfully!")
-
-		// driver, _ := postgres.WithInstance(serverDb, &postgres.Config{})
-
-		// // Load migrations from the migrations directory
-		// mirgator, err := migrate.NewWithDatabaseInstance(
-		// 	"file://migrations", // Path to the migrations folder
-		// 	"postgres",          // Database driver name
-		// 	driver,
-		// )
-		// if err != nil {
-		// 	log.Fatalf("Failed to initialize migrations: %v", err)
-		// }
-
-		// // Apply all migrations
-		// if err := mirgator.Up(); err != nil && err != migrate.ErrNoChange {
-		// 	log.Fatalf("Failed to apply migrations: %v", err)
-		// }
-		// err = serverDb.Ping()
-		// if err != nil {
-		// 	log.Fatalf("Failed to ping the original database connection: %v", err)
-		// }
-
-		// log.Println("Migrations applied successfully!")
-
-	} else {
-		log.Printf("%s is already here", Postgres_conf.Name)
-		serverConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable dbname=%s",
-			Postgres_conf.Host,
-			Postgres_conf.Port,
-			Postgres_conf.User,
-			Postgres_conf.Password,
-			Postgres_conf.Name)
-		serverDb, err = sql.Open("postgres", serverConnStr)
-		if err != nil {
-			log.Fatalf("Failed to open %s connection: %v", Postgres_conf.Name, err)
+			log.Info("Created tables")
 		}
 	}
+
 	return &PostgresDB{Conn: serverDb}, nil
 
 }

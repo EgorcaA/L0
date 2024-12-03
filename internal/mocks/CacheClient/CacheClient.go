@@ -4,6 +4,7 @@ package mocksredis
 
 import (
 	context "context"
+	"log/slog"
 
 	order_struct "github.com/EgorcaA/create_db/internal/order_struct"
 	mock "github.com/stretchr/testify/mock"
@@ -45,8 +46,8 @@ func (_m *CacheClient) GetOrder(ctx context.Context, orderUID string) (order_str
 }
 
 // RestoreCacheFromDB provides a mock function with given fields: ctx, db
-func (_m *CacheClient) RestoreCacheFromDB(ctx context.Context, db *storage.PostgresDB) {
-	_m.Called(ctx, db)
+func (_m *CacheClient) RestoreCacheFromDB(ctx context.Context, log *slog.Logger, db *storage.PostgresDB) {
+	_m.Called(ctx, log, db)
 }
 
 // SaveOrder provides a mock function with given fields: ctx, order
